@@ -97,7 +97,7 @@ python dashboard.py
 
 ## 🤖 AI Scoring System
 
-Resume parsing uses a deterministic MVP parser by default and can optionally call Gemini for JSON schema extraction when `GEMINI_API_KEY` is configured. If the LLM call fails or no key is available, the system falls back to the rule-based parser.
+Resume parsing uses a deterministic parser by default and can optionally call Gemini for JSON schema extraction when `GEMINI_API_KEY` is configured. If the LLM call fails or no key is available, the system falls back to the rule-based parser.
 
 The local scoring system ranks jobs with explainable resume-job fit signals:
 

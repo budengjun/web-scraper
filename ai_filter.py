@@ -17,7 +17,7 @@ class AIFilter:
     def __init__(self, api_key: str, keywords: List[str]):
         self.api_key = api_key
         self.keywords = keywords
-        self.model_name = "gemini-2.0-flash-lite"  # Higher free-tier quota (1500 RPD vs 500)
+        self.model_name = "gemini-2.5-flash-lite"  # Higher free-tier quota (1500 RPD vs 500)
         if self.api_key and self.api_key != "YOUR_GEMINI_API_KEY":
             self.client = genai.Client(api_key=self.api_key)
         else:
