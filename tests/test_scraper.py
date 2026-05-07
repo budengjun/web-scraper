@@ -2,7 +2,49 @@
 
 import pytest
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 from scraper import ScraperEngine
+
+
+class _FakeLocator:
+    def __init__(self, text="", href=None, children=None):
+        self.text = text
+        self.href = href
+        self.children = children or {}
+
+    @property
+    def first(self):
+        return self
+
+    def locator(self, selector):
+        return self.children.get(selector, _FakeLocator())
+
+    async def all(self):
+        return self.children.get("__all__", [])
+
+    async def inner_text(self):
+        return self.text
+
+    async def get_attribute(self, name):
+        return self.href if name == "href" else None
+
+    async def count(self):
+        return 1 if self.text or self.href or self.children else 0
+
+
+class _FakePage:
+    def __init__(self, url, locators):
+        self.url = url
+        self.locators = locators
+
+    def locator(self, selector):
+        return self.locators.get(selector, _FakeLocator())
+
+    async def goto(self, *args, **kwargs):
+        return None
+
+    async def wait_for_timeout(self, *args, **kwargs):
+        return None
 
 
 class TestParseInterceptedData:
@@ -126,3 +168,56 @@ class TestParseInterceptedData:
         assert len(jobs) == 1
         assert jobs[0].posted_date is not None
         assert isinstance(jobs[0].posted_date, datetime)
+
+
+class TestDomScrapers:
+    """Test DOM scraper link extraction without launching a browser."""
+
+    @pytest.mark.asyncio
+    async def test_workday_scraper_extracts_title_href(self):
+        engine = ScraperEngine(headless=True, timeout=5000)
+        engine._handle_pagination = AsyncMock()
+
+        job_el = _FakeLocator(children={
+            "h3 a": _FakeLocator(text="Software Intern", href="/job/software-intern"),
+            "dd.css-129m7dg": _FakeLocator(text="Vancouver, BC"),
+        })
+        page = _FakePage(
+            "https://company.wd1.myworkdayjobs.com/Careers",
+            {"li.css-1q2dra3": _FakeLocator(children={"__all__": [job_el]})},
+        )
+
+        jobs = await engine._scrape_workday(page, "Company")
+
+        assert len(jobs) == 1
+        assert jobs[0].title == "Software Intern"
+        assert jobs[0].apply_link == "https://company.wd1.myworkdayjobs.com/job/software-intern"
+
+    @pytest.mark.asyncio
+    async def test_indeed_scraper_extracts_title_href(self):
+        engine = ScraperEngine(headless=True, timeout=5000)
+
+        card = _FakeLocator(children={
+            "h2.jobTitle a, h2 a, .jobTitle a, a[data-jk]": _FakeLocator(
+                text="Data Science Intern",
+                href="/viewjob?jk=abc123&from=serp",
+            ),
+            "span[data-testid='company-name'], .companyName, .company": _FakeLocator(text="DataCo"),
+            "div[data-testid='text-location'], .companyLocation, .location": _FakeLocator(text="Vancouver, BC"),
+            ".job-snippet, .underShelfFooter, li": _FakeLocator(text="Python and ML internship."),
+        })
+        page = _FakePage(
+            "https://ca.indeed.com/jobs?q=Data+Science+Intern",
+            {".job_seen_beacon": _FakeLocator(children={"__all__": [card]})},
+        )
+
+        jobs = await engine._scrape_indeed(
+            page,
+            "Indeed",
+            {"search_queries": ["Data Science Intern"], "location": "Vancouver, BC"},
+        )
+
+        assert len(jobs) == 1
+        assert jobs[0].title == "Data Science Intern"
+        assert jobs[0].company == "DataCo"
+        assert jobs[0].apply_link == "https://ca.indeed.com/viewjob?jk=abc123"

@@ -1,0 +1,46 @@
+# Copy this file to config.yaml and fill in local secrets via environment
+# variables or private local values. config.yaml is intentionally gitignored.
+settings:
+  database_path: "jobs.db"
+  headless: true
+  timeout_ms: 30000
+  notification_webhook_url: "YOUR_DISCORD_OR_TELEGRAM_WEBHOOK_URL"
+  gemini_api_key: "YOUR_GEMINI_API_KEY"
+  # proxy: "http://user:pass@host:port"
+
+targets:
+  - name: "LinkedIn"
+    url: "https://www.linkedin.com/jobs/search/"
+    type: "linkedin"
+    location: "Vancouver, BC, Canada"
+    search_queries:
+      - "Software Engineer Intern"
+      - "AI Intern"
+      - "Machine Learning Co-op"
+      - "Data Scientist Intern"
+
+  - name: "Indeed"
+    url: "https://ca.indeed.com/jobs"
+    type: "indeed"
+    location: "Vancouver, BC"
+    search_queries:
+      - "Software Intern"
+      - "AI Intern"
+      - "Machine Learning Co-op"
+      - "Data Science Intern"
+
+keywords:
+  - React
+  - Node.js
+  - Python
+  - PyTorch
+  - TensorFlow
+  - LLM
+  - LangChain
+  - Full-stack
+  - AI
+  - Machine Learning
+  - Intern
+  - Internship
+  - Co-op
+  - Co-operative

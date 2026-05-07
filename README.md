@@ -1,11 +1,12 @@
-# Vancouver Tech Intern Job Scraper 🕷️
+# CareerRadar AI
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+[![Tests](https://github.com/budengjun/web-scraper/actions/workflows/tests.yml/badge.svg)](https://github.com/budengjun/web-scraper/actions/workflows/tests.yml)
 [![Playwright](https://img.shields.io/badge/playwright-%E2%9C%85-green)](https://playwright.dev/)
 [![Scikit-Learn](https://img.shields.io/badge/ML-Scikit--Learn-orange)](https://scikit-learn.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An automated job monitoring system that scrapes **LinkedIn** and **Indeed** for **Software / AI / ML / Data intern and co-op positions** in Vancouver, Canada. It scores jobs locally using a machine learning model and sends real-time Discord alerts.
+An AI-powered job discovery platform that converts a resume into personalized search keywords, searches selected job sources by location and preference, and ranks postings based on resume-job fit.
 
 ![Job Scraper Dashboard](demo.png)
 
@@ -13,13 +14,12 @@ An automated job monitoring system that scrapes **LinkedIn** and **Indeed** for 
 
 ## ✨ Features
 
-- 🕵️ **Multi-Platform Scraping**: LinkedIn & Indeed via Playwright; Greenhouse, Lever, Workday via API interception.
-- 🛡️ **Advanced Anti-Detection**: Rotating User-Agents, random viewports, human-like scrolling, and mouse simulation.
-- 🧠 **Local ML Scoring**: Offline `Sentence-Transformers + MLP` classifier — no API costs, instant results.
-- 📊 **Rich Web Dashboard**: Beautiful Flask-based UI with charts, search, filters, and one-click apply links.
-- 🔔 **Discord Notifications**: Rich embeds for highly relevant jobs with deduplication and rate limiting.
-- 🗄️ **Persistent Storage**: SQLite-backed history prevents re-processing old jobs.
-- 🔄 **Robust Pipeline**: Exponential backoff and retry logic for reliable scraping.
+- **Resume-driven discovery**: Upload PDF, DOCX, or TXT resumes and extract skills, courses, projects, experience, target roles, and search keywords.
+- **Editable keyword profile**: Review generated keywords, add custom terms, disable or remove poor matches, and keep priorities in SQLite.
+- **Location preferences**: Add preferred cities, remote locations, browser geolocation, work mode, and search radius metadata.
+- **Browser automation pipeline**: Search LinkedIn and Indeed with Playwright using selected keywords and locations.
+- **Resume-job matching**: Rank jobs with rule-based resume fit, matched skills, missing skills, seniority checks, and concise explanations.
+- **Dashboard and notifications**: View matched postings, apply links, dashboard stats, and Discord notifications.
 
 ---
 
@@ -28,16 +28,19 @@ An automated job monitoring system that scrapes **LinkedIn** and **Indeed** for 
 ```
 web-scraper/
 ├── main.py                    # Pipeline orchestrator: scrape → filter → score → notify
-├── scraper.py                 # Playwright engine with anti-detection & API interception
+├── scraper.py                 # Playwright browser automation and API/DOM parsing
 ├── ml_scorer.py               # Local ML scoring (Sentence-Transformers + MLP)
+├── resume_parser.py           # Resume text extraction and structured profile generation
+├── profile_store.py           # SQLite storage for resumes, keywords, locations, matches
+├── matching_engine.py         # Resume-job match scoring and explanation
 ├── notifier.py                # Discord webhook alerts
 ├── storage.py                 # SQLite persistence & deduplication
 ├── dashboard.py               # Flask web dashboard (http://localhost:5050)
 ├── models.py                  # Pydantic Job data model
-├── config.yaml                # Targets, keywords, and settings
+├── config.example.yaml        # Safe template for local config.yaml
 ├── requirements.txt           # Project dependencies
 ├── static/                    # Dashboard frontend (HTML/CSS/JS)
-└── tests/                     # Unit tests (28 passing)
+└── tests/                     # Unit tests
 ```
 
 ---
@@ -53,7 +56,13 @@ playwright install chromium
 ```
 
 ### 2. Configure Settings
-Edit `config.yaml` to set your Discord webhook and search preferences:
+Create a private `config.yaml` from the checked-in template, then set your Discord webhook and search preferences:
+```bash
+cp config.example.yaml config.yaml
+```
+
+Never commit `config.yaml`. Use `config.example.yaml` as the template and store API keys in environment variables such as `GEMINI_API_KEY` and `WEBHOOK_URL` when possible.
+
 ```yaml
 settings:
   notification_webhook_url: "YOUR_DISCORD_WEBHOOK_URL"
@@ -76,16 +85,28 @@ python dashboard.py
 # View at http://localhost:5050
 ```
 
+### 4. Personalized Discovery Flow
+
+1. Upload a resume in the dashboard.
+2. Review extracted skills, target roles, and generated keywords.
+3. Add preferred locations or use browser geolocation.
+4. Run personalized search.
+5. Review ranked jobs with matched skills, missing skills, and fit explanations.
+
 ---
 
 ## 🤖 AI Scoring System
 
-The local scoring system replaces expensive cloud AI APIs with a high-performance local pipeline:
+Resume parsing uses a deterministic MVP parser by default and can optionally call Gemini for JSON schema extraction when `GEMINI_API_KEY` is configured. If the LLM call fails or no key is available, the system falls back to the rule-based parser.
+
+The local scoring system ranks jobs with explainable resume-job fit signals:
 
 | Component | Technology | Description |
 |---|---|---|
+| **Resume Parser** | Rule-based + optional Gemini JSON extraction | Extracts skills, courses, projects, experience, target roles, and search keywords. |
 | **Embedder** | `all-MiniLM-L6-v2` | CPU-friendly transformer (~80MB) that converts job descriptions into 384-dim vectors. |
 | **Classifier** | `MLPClassifier` | Multi-layer Perceptron trained on your historical data to predict job relevance. |
+| **Rule Matching** | Local Python scoring | Scores matched skills, missing skills, keyword fit, location preference, and seniority alignment. |
 | **Backoff** | `Cosine Similarity` | Fallback mechanism that scores jobs based on keyword similarity if no training data is present. |
 | **Training** | `Auto-Labeling` | `generate_training_data.py` bootstraps your model by labeling your existing jobs database. |
 
@@ -97,13 +118,9 @@ python -c "from ml_scorer import MLScorer; MLScorer().train()"
 
 ---
 
-## 🛡️ Anti-Detection Suite
+## Responsible Data Collection
 
-Engineered to operate reliably without being flagged:
-- **Fingerprint Masking**: Uses `playwright-stealth` to bypass header-based detection.
-- **Dynamic Behavior**: Randomizes wait times, scroll speeds, and mouse paths.
-- **Session Variance**: Varies viewport resolutions and User-Agent strings per run.
-- **Headless Toggle**: Easy switch to non-headless mode in `config.yaml` for high-security targets.
+The project uses browser automation for dynamic job pages and keeps collection rate-limited. Prefer public career pages, Greenhouse, Lever, Workday, and sources with stable public listings for portfolio demonstrations.
 
 ---
 
@@ -138,6 +155,8 @@ jobs:
 ---
 
 ## 🧪 Development
+
+Tested locally with Python 3.11; 37 unit tests passing.
 
 ```bash
 # Run tests

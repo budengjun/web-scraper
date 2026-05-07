@@ -11,7 +11,7 @@ from urllib.parse import urljoin, quote_plus
 
 logger = logging.getLogger(__name__)
 
-# ── Anti-detection: rotating User-Agent pool ──
+# ── Browser session profiles ──
 _USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -53,17 +53,17 @@ class ScraperEngine:
         self.intercepted_data: List[Dict[str, Any]] = []
 
     # ──────────────────────────────────────────────
-    # Anti-detection: human behavior simulation
+    # Browser interaction helpers for dynamic pages
     # ──────────────────────────────────────────────
 
     @staticmethod
     async def _random_delay(min_s: float = 1.0, max_s: float = 3.5):
-        """Wait a random duration to mimic human reading/thinking time."""
+        """Wait between page actions to keep requests rate-limited."""
         await asyncio.sleep(random.uniform(min_s, max_s))
 
     @staticmethod
-    async def _human_scroll(page: Page, scroll_count: int = 3):
-        """Scroll down in a natural, variable-speed pattern."""
+    async def _scroll_results_page(page: Page, scroll_count: int = 3):
+        """Scroll dynamic result pages to load additional listings."""
         for i in range(scroll_count):
             # Variable scroll distance
             distance = random.randint(400, 900)
@@ -72,7 +72,7 @@ class ScraperEngine:
 
     @staticmethod
     async def _random_mouse_move(page: Page):
-        """Simulate random mouse movement to avoid bot detection."""
+        """Optional pointer interaction for pages that depend on user events."""
         try:
             x = random.randint(100, 800)
             y = random.randint(100, 500)
@@ -82,23 +82,23 @@ class ScraperEngine:
             pass  # Mouse move is best-effort
 
     @staticmethod
-    async def _is_blocked(page: Page) -> bool:
-        """Detect if LinkedIn/Indeed has blocked us (login wall, CAPTCHA, 403)."""
+    async def _is_unavailable_result_page(page: Page) -> bool:
+        """Detect login walls, verification pages, or unavailable result pages."""
         try:
             url = page.url
             # LinkedIn login redirect
             if "linkedin.com/authwall" in url or "linkedin.com/checkpoint" in url:
                 logger.warning("⚠️  LinkedIn login wall detected. Rotating to next query.")
                 return True
-            # Check for blocked / CAPTCHA text
+            # Check for verification or unavailable-page text
             body_text = await page.inner_text("body")
-            blocked_signals = [
+            unavailable_signals = [
                 "Sign in to view", "Join now to see",
                 "Let's do a quick security check", "unusual activity",
                 "verify you're a real person",
             ]
-            if any(sig.lower() in body_text.lower() for sig in blocked_signals):
-                logger.warning("⚠️  Anti-bot block detected on page. Skipping.")
+            if any(sig.lower() in body_text.lower() for sig in unavailable_signals):
+                logger.warning("⚠️  Verification page detected. Skipping.")
                 return True
         except Exception:
             pass
@@ -343,8 +343,9 @@ class ScraperEngine:
 
             for el in job_elements:
                 try:
-                    title_el = el.locator(title_sel)
+                    title_el = el.locator(title_sel).first
                     title = await title_el.inner_text()
+                    link = await title_el.get_attribute("href")
                     full_link = urljoin(page.url, link) if link else page.url
 
                     location = "Check Listing"
@@ -507,12 +508,12 @@ class ScraperEngine:
                 await self._random_delay(2.5, 4.5)  # Human-like wait after page load
 
                 # Check for anti-bot blocks
-                if await self._is_blocked(page):
+                if await self._is_unavailable_result_page(page):
                     continue
 
-                # Simulate human browsing: mouse move + natural scroll
+                # Interact with dynamic result pages before reading cards
                 await self._random_mouse_move(page)
-                await self._human_scroll(page, scroll_count=random.randint(2, 4))
+                await self._scroll_results_page(page, scroll_count=random.randint(2, 4))
 
                 # Try multiple selector patterns (LinkedIn changes these frequently)
                 card_selectors = [
@@ -575,7 +576,7 @@ class ScraperEngine:
             except Exception as e:
                 logger.warning(f"LinkedIn search failed for '{query}': {e}")
 
-            # Anti-detection: random wait between searches (3-7 seconds)
+            # Rate-limit requests between searches
             await self._random_delay(3.0, 7.0)
 
         logger.info(f"LinkedIn total: {len(jobs)} unique jobs across {len(search_queries)} queries")
@@ -630,6 +631,7 @@ class ScraperEngine:
                         title = (await title_el.inner_text()).strip()
 
                         # Link
+                        link = await title_el.get_attribute("href")
                         link = urljoin(page.url, link) if link else None
 
                         if not link or link in seen_links:
@@ -671,7 +673,7 @@ class ScraperEngine:
             except Exception as e:
                 logger.warning(f"Indeed search failed for '{query}': {e}")
 
-            # Anti-detection: wait between searches
+            # Rate-limit requests between searches
             await page.wait_for_timeout(5000)
 
         logger.info(f"Indeed total: {len(jobs)} unique jobs across {len(search_queries)} queries")
